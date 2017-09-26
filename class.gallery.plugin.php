@@ -2,7 +2,7 @@
 $PluginInfo['gallery'] = [
     'Name' => 'Gallery',
     'Description' => 'Allows users to add a simple image gallery to their profile',
-    'Version' => '0.1.2',
+    'Version' => '0.1.3',
     'RequiredApplications' => ['Vanilla' => '>= 2.3'],
     'SettingsPermission' => 'Garden.Settings.Manage',
     'SettingsUrl' => '/dashboard/settings/gallery',
@@ -21,8 +21,6 @@ $PluginInfo['gallery'] = [
 /**
  * Todos:
  * Activity item for picture upload
- * Adding CountGalleries (not the right word but the right wording...) to user table
- * Implement view and add permission
  * Consider caching
  * Allow nameing of pictures
  */
@@ -57,6 +55,18 @@ class GalleryPlugin extends Gdn_Plugin {
             ->table('User')
             ->column('CountGalleries', 'int', null)
             ->set();
+        (new activityModel())->defineType(
+            'Gallery',
+            [
+                'AllowComments' => true,
+                'ShowIcon' => true,
+                'ProfileHeadline' => '%1$s has uploaded a new image to his gallery.',
+                'FullHeadline' => '%1$s has uploaded a new image to his gallery.',
+                'RouteCode' => 'profile',
+                'Notify' => '0',
+                'Public' => '1'
+            ]
+        );
     }
 
     /**
@@ -301,6 +311,17 @@ class GalleryPlugin extends Gdn_Plugin {
                     $sender->User->UserID,
                     ['CountGalleries' => $sender->User->CountGalleries + 1]
                 );
+
+                $activityModel = new activityModel();
+                $activity = [
+                    'ActivityType' => 'Gallery',
+                    'ActivityUserID' => Gdn::session()->UserID,
+                    'HeadlineFormat' => '{ActivityUserID,user} added an image to his <a href="{Url}">gallery</a>.',
+                    'Story' => '<img src="'.Gdn_Upload::url($mediaInfo['ThumbPath']).'">',
+                    'Route' => userUrl($sender->User, '', 'gallery')
+                ];
+                $activityModel->save($activity); // Notify.
+
                 $sender->RedirectUrl = userUrl($sender->User, '', 'gallery');
             }
         }
