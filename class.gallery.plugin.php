@@ -20,7 +20,6 @@ $PluginInfo['gallery'] = [
 
 /**
  * Todos:
- * Activity item for picture upload
  * Consider caching
  * Allow nameing of pictures
  */
@@ -312,17 +311,18 @@ class GalleryPlugin extends Gdn_Plugin {
                     ['CountGalleries' => $sender->User->CountGalleries + 1]
                 );
 
-                $activityModel = new activityModel();
-                $activity = [
-                    'ActivityType' => 'Gallery',
-                    'ActivityUserID' => Gdn::session()->UserID,
-                    'HeadlineFormat' => '{ActivityUserID,user} added an image to his <a href="{Url}">gallery</a>.',
-                    'Story' => '<img src="'.Gdn_Upload::url($mediaInfo['ThumbPath']).'">',
-                    'Route' => userUrl($sender->User, '', 'gallery')
-                ];
-                $activityModel->save($activity); // Notify.
+                $route = userUrl($sender->User, '', 'gallery');
+                (new activityModel())->save(
+                    [
+                        'ActivityType' => 'Gallery',
+                        'ActivityUserID' => Gdn::session()->UserID,
+                        'HeadlineFormat' => '{ActivityUserID,user} added an image to his <a href="{Url}">gallery</a>.',
+                        'Story' => '<img src="'.Gdn_Upload::url($mediaInfo['ThumbPath']).'">',
+                        'Route' => $route
+                    ]
+                );
 
-                $sender->RedirectUrl = userUrl($sender->User, '', 'gallery');
+                $sender->RedirectUrl = $route;
             }
         }
 
