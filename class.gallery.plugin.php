@@ -2,13 +2,13 @@
 $PluginInfo['gallery'] = [
     'Name' => 'Gallery',
     'Description' => 'Allows users to add a simple image gallery to their profile',
-    'Version' => '0.1.1',
+    'Version' => '0.1.2',
     'RequiredApplications' => ['Vanilla' => '>= 2.3'],
     'SettingsPermission' => 'Garden.Settings.Manage',
     'SettingsUrl' => '/dashboard/settings/gallery',
     'RegisterPermissions' => [
-        // 'Plugins.Gallery.Add', // If role is allowed to have a gallery.
-        // 'Plugins.Gallery.View', // If role is allowed to view galleries.
+        'Plugins.Gallery.Add', // If role is allowed to have a gallery.
+        'Plugins.Gallery.View', // If role is allowed to view galleries.
         'Plugins.Gallery.Manage' // If role is allowed to manage galleries.
     ],
     'MobileFriendly' => true,
@@ -115,7 +115,15 @@ class GalleryPlugin extends Gdn_Plugin {
      * @return void.
      */
     public function profileController_addProfileTabs_handler($sender) {
+        if (!Gdn::session()->checkPermission('Plugins.Gallery.View')) {
+            return; // Ensure session user is allowed to view gallery.
+        }
+        if (!Gdn::userModel()->checkPermission($sender->User, 'Plugins.Gallery.Add')) {
+            return; // Ensure profile user is allowed to add gallery.
+        }
+
         $label = sprite('SpGallery').' '.t('Gallery');
+        // Add count to label.
         if (c('Vanilla.Profile.ShowCounts', true)) {
             $label .= '<span class="Aside">';
             $label .= countString(
@@ -124,6 +132,7 @@ class GalleryPlugin extends Gdn_Plugin {
             );
             $label .= '</span>';
         }
+
         // Insert a menu entry for the gallery.
         $sender->addProfileTab(
             t('Gallery'),
@@ -134,21 +143,31 @@ class GalleryPlugin extends Gdn_Plugin {
     }
 
     /**
-     * Endpoint for the simple gallery.
+     * Create endpoint in ProfileController and route requests.
      *
      * @param ProfileController $sender Instance of the calling class.
      *
      * @return void.
      */
     public function profileController_gallery_create($sender) {
-        $sender->addJsFile('magnific-popup.min.js');
-        $sender->addCssFile('magnific-popup.css', 'dashboard');
+        if (!Gdn::session()->checkPermission('Plugins.Gallery.View')) {
+            throw permissionException(); // UserRole is not allowed to view.
+        }
 
+        // Get the user from the url and set to ProfileController.
         $sender->editMode(false);
         $sender->getUserInfo(
             val(0, $sender->RequestArgs, ''),
             val(1, $sender->RequestArgs, '')
         );
+
+        if (!Gdn::userModel()->checkPermission($sender->User, 'Plugins.Gallery.Add')) {
+            // Profile user is not allowed to have a gallery.
+            throw notFoundException();
+        }
+
+        $sender->addJsFile('magnific-popup.min.js');
+        $sender->addCssFile('magnific-popup.css', 'dashboard');
 
         // Set the breadcrumbs to match our page.
         $sender->setData(
@@ -394,16 +413,21 @@ class GalleryPlugin extends Gdn_Plugin {
      */
     private function canEdit($user) {
         if (!Gdn_UploadImage::canUploadImages()) {
-            return false;
+            return false; // Image upload generally not possible
         }
+
         $session = Gdn::session();
+        if (!Gdn::session()->checkPermission('Plugins.Gallery.Add')) {
+            return false; // UserRole is not allowed for galleries.
+        }
         if ($user->UserID == $session->UserID) {
-            return true;
+            return true; // User is allowed to change his own gallery.
         }
         if ($session->checkPermission('Plugins.Gallery.Manage')) {
-            return true;
+            return true; // UserRole is allowed to manage galleries.
         }
-        return false;
+
+        return false; // Just in case we've missed something...
     }
 
     /**
