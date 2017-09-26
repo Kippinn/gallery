@@ -2,7 +2,7 @@
 $PluginInfo['gallery'] = [
     'Name' => 'Gallery',
     'Description' => 'Allows users to add a simple image gallery to their profile',
-    'Version' => '0.1.0',
+    'Version' => '0.1.1',
     'RequiredApplications' => ['Vanilla' => '>= 2.3'],
     'SettingsPermission' => 'Garden.Settings.Manage',
     'SettingsUrl' => '/dashboard/settings/gallery',
@@ -52,6 +52,10 @@ class GalleryPlugin extends Gdn_Plugin {
             ->table('Media')
             ->column('GalleryOrder', 'int', true)
             // ->column('GalleryTitle', 'varchar(64)', '')
+            ->set();
+        Gdn::structure()
+            ->table('User')
+            ->column('CountGalleries', 'int', null)
             ->set();
     }
 
@@ -111,12 +115,21 @@ class GalleryPlugin extends Gdn_Plugin {
      * @return void.
      */
     public function profileController_addProfileTabs_handler($sender) {
+        $label = sprite('SpGallery').' '.t('Gallery');
+        if (c('Vanilla.Profile.ShowCounts', true)) {
+            $label .= '<span class="Aside">';
+            $label .= countString(
+                $sender->User->CountGalleries,
+                '/profile/count/galleries?userid='.$sender->User->UserID
+            );
+            $label .= '</span>';
+        }
         // Insert a menu entry for the gallery.
         $sender->addProfileTab(
             t('Gallery'),
             userUrl($sender->User, '', 'gallery'),
             'Gallery',
-            sprite('SpGallery').' '.t('Gallery')
+            $label
         );
     }
 
@@ -259,13 +272,16 @@ class GalleryPlugin extends Gdn_Plugin {
                     'ThumbWidth' => $thumbInfo['ImageWidth'],
                     'ThumbHeight' => $thumbInfo['ImageHeight'],
                     'ThumbPath' => $thumbInfo['Path'],
-                    'GalleryOrder' => 0
+                    'GalleryOrder' => $sender->User->CountGalleries + 1
                 ];
                 $mediaInfo['ThumbPath'] = substr($mediaInfo['ThumbPath'], strlen(PATH_UPLOADS) + 1);
                 $imageInfo['Path'] = substr($imageInfo['Path'], strlen(PATH_UPLOADS) + 1);
                 $model = new Gdn_Model('Media');
                 $mediaID = $model->save(array_merge($imageInfo, $mediaInfo));
-
+                Gdn::userModel()->setField(
+                    $sender->User->UserID,
+                    ['CountGalleries' => $sender->User->CountGalleries + 1]
+                );
                 $sender->RedirectUrl = userUrl($sender->User, '', 'gallery');
             }
         }
@@ -314,6 +330,10 @@ class GalleryPlugin extends Gdn_Plugin {
                 'InsertUserID' => $sender->User->UserID
             ]
         );
+        Gdn::userModel()->setField(
+            $sender->User->UserID,
+            ['CountGalleries' => max(0, $sender->User->CountGalleries - 1)]
+        );
         redirect(userUrl($sender->User, '', 'gallery'));
     }
 
@@ -353,6 +373,10 @@ class GalleryPlugin extends Gdn_Plugin {
                 );
             }
         }
+        Gdn::userModel()->setField(
+            $sender->User->UserID,
+            ['CountGalleries' => count($oldSort)]
+        );
         /*
         echo json_encode(['InformMessages' => [[
             'Message' => t('Saved'),
